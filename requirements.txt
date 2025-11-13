@@ -1,2 +1,4 @@
 python-telegram-bot==22.5
 flask==3.0.3  # Webhook uchun (engil web server)
+gunicorn==22.0.0
+
