@@ -1,9 +1,11 @@
 import re
 import os
 import logging
+import asyncio
 from flask import Flask, request
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.error import TelegramError
 
 # Logging
 logging.basicConfig(
@@ -12,12 +14,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Token env'dan
+# Token va URL env'dan
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN kerak!")
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # Placeholder o'chirildi – majburiy env
+if not BOT_TOKEN or not WEBHOOK_URL:
+    raise ValueError("BOT_TOKEN va WEBHOOK_URL env'ga kerak!")
 
-# Flask app (Render uchun)
+# Flask app
 app = Flask(__name__)
 
 # Telegram app
@@ -67,24 +70,38 @@ application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 application.add_error_handler(error_handler)
 
-# Webhook endpoint (Render uchun /webhook)
+# Webhook endpoint
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    update = Update.de_json(request.get_json(), application.bot)
-    application.process_update(update)
-    return 'OK'
+    try:
+        update = Update.de_json(request.get_json(), application.bot)
+        asyncio.create_task(application.process_update(update))  # Async process
+        return 'OK'
+    except Exception as e:
+        logger.error(f"Webhook xatosi: {e}")
+        return 'Error', 500
 
 @app.route('/')
 def index():
     return "Bot ishga tushdi! Webhook rejimida."
 
-def main():
-    # Webhook o'rnatish (bir marta ishga tushganda)
-    WEBHOOK_URL = os.getenv('WEBHOOK_URL', 'https://your-service.onrender.com/webhook')  # Render URL'ni env'ga qo'shing
-    application.bot.set_webhook(WEBHOOK_URL)
-    logger.info(f"🤖 Webhook o'rnatildi: {WEBHOOK_URL}")
-    logger.info("Bot tayyor! Render Web Service sifatida ishlaydi.")
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
+async def main():
+    """ Async main: Webhook o'rnatish """
+    try:
+        # Webhook o'rnatish (await bilan)
+        await application.bot.set_webhook(WEBHOOK_URL)
+        webhook_info = await application.bot.get_webhook_info()
+        if webhook_info.url == WEBHOOK_URL:
+            logger.info(f"✅ Webhook muvaffaqiyatli o'rnatildi: {WEBHOOK_URL}")
+        else:
+            logger.error(f"❌ Webhook o'rnatilmadi! Joriy: {webhook_info.url}")
+    except TelegramError as e:
+        logger.error(f"Webhook o'rnatish xatosi: {e}")
+        raise
+    logger.info("🤖 Bot tayyor! Render Web Service sifatida ishlaydi.")
+    # Flask server'ni boshlash (sinxron)
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=False)
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
