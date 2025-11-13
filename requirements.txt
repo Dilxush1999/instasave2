@@ -1,2 +1,2 @@
 python-telegram-bot==22.5
-instaloader==4.12.1
+flask==3.0.3  # Webhook uchun (engil web server)
