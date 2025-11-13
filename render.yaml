@@ -1,0 +1,11 @@
+services:
+  - type: worker  # Background worker uchun
+    name: instagram-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python instagram_bot_advanced.py
+    envVars:
+      - key: BOT_TOKEN
+        fromDatabase:
+          name: your-db  # Agar DB bo'lsa, lekin bizda yo'q
+    autoDeploy: true
